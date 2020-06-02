@@ -1,3 +1,8 @@
+mod pswdmng;
+
+pub use crate::pswdmng::cli;
+pub use crate::pswdmng::error::Error;
+
 #[cfg(test)]
 mod tests {
     #[test]
