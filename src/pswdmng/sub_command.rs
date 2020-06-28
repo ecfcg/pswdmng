@@ -1,8 +1,9 @@
 pub(crate) mod add_user;
+pub(crate) mod update_user;
 pub(crate) mod initialize;
 
 use crate::pswdmng::error::Error;
-use rusqlite::{Connection, Error as SqlError, Transaction};
+use rusqlite::{Connection, Transaction};
 
 pub(crate) use add_user::AddUser;
 pub(crate) use initialize::Initializer;
@@ -10,7 +11,7 @@ pub(crate) use initialize::Initializer;
 pub(crate) trait SubCommand {
    fn run(self: &Self, conn: &mut Connection) -> Result<(), Error>;
 
-   fn run_transaction_inner(self: &Self, tx: &Transaction) -> Result<(), Error> {
+   fn run_transaction_inner(self: &Self, _tx: &Transaction) -> Result<(), Error> {
       Ok(())
    }
 
