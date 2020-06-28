@@ -4,7 +4,7 @@ use clap::{
 
 use rusqlite::Connection;
 
-use crate::pswdmng::error::{try_block, Error};
+use crate::pswdmng::error::Error;
 use crate::pswdmng::sub_command::{Initializer, SubCommand as PSubCommand};
 
 fn build() -> App<'static, 'static> {
@@ -21,7 +21,10 @@ pub fn execute() -> Result<(), Error> {
     };
 
     todo!(); // Provisional file name
-    let conn = try_block(&|| Connection::open("test.db"))?;
+    let mut conn = match Connection::open("test.db") {
+        Ok(c) => c,
+        Err(e) => return Err(Error::SQLITE(e)),
+    };
 
-    runner.run(&conn)
+    runner.run(&mut conn)
 }

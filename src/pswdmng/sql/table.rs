@@ -3,8 +3,8 @@ mod user;
 
 pub(crate) use self::account::Account;
 pub(crate) use self::user::User;
-use crate::pswdmng::error::{try_block, Error};
-use rusqlite::{params, Connection};
+use crate::pswdmng::error::Error;
+use rusqlite::{params, Connection, Error as SqlError};
 
 pub(crate) const TABLE_NAMES: [&'static str; 2] = ["ACCOUNT", "USER"];
 
@@ -13,7 +13,10 @@ pub(crate) trait Ddl {
     fn drop_ddl() -> &'static str;
 
     fn execute_ddl(conn: &Connection, ddl_statement: &'static str) -> Result<usize, Error> {
-        try_block( &|| conn.execute(ddl_statement, params![]))
+        match conn.execute(ddl_statement, params![]) {
+            Ok(u) => Ok(u),
+            Err(e) => Err(Error::SQLITE(e)),
+        }
     }
 
     fn create_table(con: &Connection) -> Result<usize, Error> {
@@ -26,33 +29,38 @@ pub(crate) trait Ddl {
 }
 
 pub(crate) fn exists_tables(conn: &Connection) -> Result<bool, Error> {
-    let exists_tables = try_block(&|| {
-        let mut stmt = conn.prepare(
-            r###"
-        SELECT
-            NAME
-        FROM
-            SQLITE_MASTER
-        WHERE
-            TYPE = 'table' 
-            AND NAME NOT LIKE 'sqlite_%'
-        ORDER BY NAME
-        "###,
-        )?;
-        let mut rows = stmt.query(params![])?;
-        let mut exists_tables: Vec<String> = Vec::new();
-        loop {
-            let row = rows.next()?;
-            let table_name = match row {
-                Some(s) => s.get(0)?,
-                None => break,
-            };
-            exists_tables.push(table_name);
-        }
-        Ok(exists_tables)
-    })?;
+    let exists_tables = match exist_table_impl(conn) {
+        Ok(v) => v,
+        Err(e) => return Err(Error::SQLITE(e)),
+    };
 
     Ok(exists_tables.eq(&TABLE_NAMES))
+}
+
+fn exist_table_impl(conn: &Connection) -> Result<Vec<String>, SqlError> {
+    let mut stmt = conn.prepare(
+        r###"
+    SELECT
+        NAME
+    FROM
+        SQLITE_MASTER
+    WHERE
+        TYPE = 'table' 
+        AND NAME NOT LIKE 'sqlite_%'
+    ORDER BY NAME
+    "###,
+    )?;
+    let mut rows = stmt.query(params![])?;
+    let mut exists_tables: Vec<String> = Vec::new();
+    loop {
+        let row = rows.next()?;
+        let table_name = match row {
+            Some(s) => s.get(0)?,
+            None => break,
+        };
+        exists_tables.push(table_name);
+    }
+    Ok(exists_tables)
 }
 
 #[cfg(test)]

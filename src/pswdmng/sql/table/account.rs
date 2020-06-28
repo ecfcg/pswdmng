@@ -2,24 +2,27 @@ use super::Ddl;
 
 #[derive(Clone, Debug)]
 pub(crate) struct Account {
-    id: String,
-    name: String,
+    user_name: String,
+    account_name: String,
+    account_id: String,
     password: String,
     email: String,
     url: String,
+    comment: String,
 }
 
 impl Ddl for Account {
     fn create_ddl() -> &'static str {
         r###"
         CREATE TABLE ACCOUNT(
-        ID TEXT,
-        NAME TEXT,
-        PASSWORD TEXT NOT NULL,
+        USER_NAME TEXT,
+        ACCOUNT_NAME TEXT,
+        ACCOUNT_ID TEXT,
+        ACCOUNT_PASSWORD TEXT NOT NULL,
         EMAIL TEXT,
         URL TEXT,
-        PRIMARY KEY(ID, NAME),
-        FOREIGN KEY(ID) REFERENCES USER(ID)
+        COMMENT TEXT,
+        PRIMARY KEY(USER_NAME, ACCOUNT_NAME)
         )"###
     }
 

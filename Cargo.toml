@@ -10,3 +10,5 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 clap = { version = "2.33.1" }
 rusqlite = { version = "0.23.1", features = ["bundled"] }
+rand = { version = "0.7.3" }
+rust-crypto = { version = "^0.2"}

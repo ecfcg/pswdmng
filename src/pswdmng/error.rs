@@ -5,14 +5,7 @@ use rusqlite::Error as SqlError;
 #[derive(Debug, PartialEq)]
 pub enum Error {
     SQLITE(SqlError),
-    LOGIC(&'static str),
-}
-
-pub(crate) fn try_block<T>(fnc: &dyn Fn() -> rusqlite::Result<T>) -> Result<T, Error> {
-    match fnc() {
-        Ok(t) => Ok(t),
-        Err(e) => Err(Error::SQLITE(e)),
-    }
+    LOGIC(String),
 }
 
 impl Display for Error {

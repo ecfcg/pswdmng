@@ -1,5 +1,4 @@
 use crypto::digest::Digest;
-use crypto::sha2::Sha512;
 use crypto::sha3::Sha3;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
@@ -17,16 +16,11 @@ pub(crate) fn create_ascii_str(len: usize) -> String {
     )
     .unwrap()
 }
-
-pub(crate) fn sha512_hashcode(raw_str: String, salt: String) -> String {
-    hashcode(Sha512::new(), raw_str, salt)
-}
-
-pub(crate) fn sha3_512_hashcode(raw_str: String, salt: String) -> String {
+pub(crate) fn sha3_512_hashcode(raw_str: &String, salt: &String) -> String {
     hashcode(Sha3::sha3_512(), raw_str, salt)
 }
 
-fn hashcode<T>(mut hasher: T, raw_str: String, salt: String) -> String
+fn hashcode<T>(mut hasher: T, raw_str: &String, salt: &String) -> String
 where
     T: Digest,
 {
@@ -51,9 +45,9 @@ mod test {
     fn test_hash_code() {
         let raw = "raw";
         let salt = "salt";
-        assert_ne!(
-            sha512_hashcode(String::from(raw), String::from(salt)),
-            sha3_512_hashcode(String::from(raw), String::from(salt))
+        assert_eq!(
+            sha3_512_hashcode(&String::from(raw), &String::from(salt)),
+            sha3_512_hashcode(&String::from(raw), &String::from(salt))
         );
     }
 }
