@@ -1,4 +1,4 @@
-use rusqlite::{Connection, Error as SqlError, Transaction};
+use rusqlite::{Connection, Transaction};
 
 use super::SubCommand;
 use crate::pswdmng::error::Error;
@@ -44,11 +44,30 @@ impl SubCommand for AddUser {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::pswdmng::sub_command::Initializer;
 
     #[test]
     fn test_new() {
         let result = AddUser::new(String::from("name"), String::from("password"));
         assert_eq!(result.user_name, "name");
         assert_eq!(result.raw_user_password, "password");
+    }
+
+    #[test]
+    fn test_run_transaction_inner() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        let initializer = Initializer::new();
+        initializer.run(&mut conn).unwrap();
+
+        let add_user = AddUser::new(String::from("name"), String::from("pass"));
+        assert_eq!(add_user.run(&mut conn), Ok(()));
+        assert_eq!(
+            add_user.run(&mut conn),
+            Err(Error::LOGIC(String::from(
+                "The user is already exists. :name"
+            )))
+        );
+
+        conn.close().unwrap();
     }
 }
