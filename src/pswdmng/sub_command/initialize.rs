@@ -14,9 +14,9 @@ impl Initializer {
 }
 
 impl SubCommand for Initializer {
-    fn run(self: &Self, conn: &mut Connection) -> Result<(), Error> {
+    fn run(self: Self, conn: &mut Connection) -> Result<(), Error> {
         if exists_tables(conn)? {
-            return Err(Error::LOGIC(String::from("Already initialized.")));
+            return Err(Error::AlreadyInitialized);
         }
         User::create_table(conn)?;
         Account::create_table(conn)?;
@@ -31,12 +31,13 @@ mod test {
     #[test]
     fn test_run() {
         let mut conn = Connection::open_in_memory().unwrap();
+
         let initializer = Initializer::new();
         assert_eq!(initializer.run(&mut conn).unwrap(), ());
-        assert_eq!(
-            initializer.run(&mut conn),
-            Err(Error::LOGIC(String::from("Already initialized.")))
-        );
+
+        let initializer = Initializer::new();
+        assert_eq!(initializer.run(&mut conn), Err(Error::AlreadyInitialized));
+
         conn.close().unwrap();
     }
 }

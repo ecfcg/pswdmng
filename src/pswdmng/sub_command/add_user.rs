@@ -20,21 +20,17 @@ impl AddUser {
 }
 
 impl SubCommand for AddUser {
-    fn run(self: &Self, conn: &mut Connection) -> Result<(), Error> {
+    fn run(self: Self, conn: &mut Connection) -> Result<(), Error> {
         self.run_with_transaction(conn)
     }
 
     fn run_transaction_inner(self: &Self, tx: &Transaction) -> Result<(), Error> {
         if User::exists_by_name(&tx, &self.user_name)? {
-            return Err(Error::LOGIC(format!(
-                "The user is already exists. :{}",
-                &self.user_name
-            )));
+            return Err(Error::AlreadyExistsUser(self.user_name.clone()));
         }
 
-        let salt = hashcode::create_ascii_str(16);
-        let hashed = hashcode::sha3_512_hashcode(&self.raw_user_password, &salt);
-        let new_user = User::new(&self.user_name, &hashed, &salt);
+        let new_user =
+            User::from_raw_password(self.user_name.clone(), self.raw_user_password.clone());
         new_user.insert(&tx)?;
 
         Ok(())
@@ -56,16 +52,17 @@ mod test {
     #[test]
     fn test_run_transaction_inner() {
         let mut conn = Connection::open_in_memory().unwrap();
+
         let initializer = Initializer::new();
         initializer.run(&mut conn).unwrap();
 
         let add_user = AddUser::new(String::from("name"), String::from("pass"));
         assert_eq!(add_user.run(&mut conn), Ok(()));
+        
+        let add_user = AddUser::new(String::from("name"), String::from("pass"));
         assert_eq!(
             add_user.run(&mut conn),
-            Err(Error::LOGIC(String::from(
-                "The user is already exists. :name"
-            )))
+            Err(Error::AlreadyExistsUser(String::from("name")))
         );
 
         conn.close().unwrap();
