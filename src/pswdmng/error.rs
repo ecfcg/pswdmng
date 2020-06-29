@@ -14,7 +14,7 @@ impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self {
             Error::SQLITE(e) => e.fmt(f),
-            AlreadyInitialized => String::from("Already initialized.").fmt(f),
+            Error::AlreadyInitialized => String::from("Already initialized.").fmt(f),
             Error::AlreadyExistsUser (e) => format!("The user is already exists.:{}", e).fmt(f),
             Error::NotValidUser(_, _) => format!("Not a valid user name or password.").fmt(f),
         }

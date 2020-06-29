@@ -1,4 +1,4 @@
-use crate::pswdmng::error::Error;
+use crate::pswdmng::Error;
 use crate::pswdmng::sql::table::{exists_tables, Account, Ddl, User};
 
 use super::SubCommand;
@@ -14,13 +14,17 @@ impl Initializer {
 }
 
 impl SubCommand for Initializer {
-    fn run(self: Self, conn: &mut Connection) -> Result<(), Error> {
+    fn run(self: Self, conn: &Connection) -> Result<(), Error> {
         if exists_tables(conn)? {
             return Err(Error::AlreadyInitialized);
         }
         User::create_table(conn)?;
         Account::create_table(conn)?;
         Ok(())
+    }
+
+    fn with_transaction(self: &Self) -> bool {
+        false
     }
 }
 

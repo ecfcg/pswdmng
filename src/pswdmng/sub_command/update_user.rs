@@ -1,58 +1,45 @@
-use rusqlite::{Connection, Transaction};
+use rusqlite::Connection;
 
 use super::SubCommand;
-use crate::pswdmng::error::Error;
+use crate::pswdmng::Error;
 use crate::pswdmng::sql::table::User;
+use crate::pswdmng::ArgUser;
 
 pub(crate) struct UpdateUser {
-    user_name_old: String,
-    user_name_new: String,
-    raw_password_old: String,
-    raw_password_new: String,
+    old_user: ArgUser,
+    new_user: ArgUser,
 }
 
 impl UpdateUser {
-    pub(crate) fn new(
-        user_name_old: String,
-        user_name_new: String,
-        raw_password_old: String,
-        raw_password_new: String,
-    ) -> Self {
+    pub(crate) fn new(old_user: ArgUser, new_user: ArgUser) -> Self {
         UpdateUser {
-            user_name_old: user_name_old,
-            user_name_new: user_name_new,
-            raw_password_old: raw_password_old,
-            raw_password_new: raw_password_new,
+            old_user: old_user,
+            new_user: new_user,
         }
     }
 }
 
 impl SubCommand for UpdateUser {
-    fn run(self: Self, conn: &mut Connection) -> Result<(), Error> {
-        self.run_with_transaction(conn)
-    }
-
-    fn run_transaction_inner(self: &Self, tx: &Transaction) -> Result<(), Error> {
-        if !User::exists_by_name(&tx, &self.user_name_old)? {
+    fn run(self: Self, conn: &Connection) -> Result<(), Error> {
+        if !User::exists_by_name(&conn, &self.old_user.name)? {
             return Err(Error::NotValidUser(
-                self.user_name_old.clone(),
-                self.raw_password_old.clone(),
+                self.old_user.name,
+                self.old_user.raw_password,
             ));
         }
 
-        let user_old = User::select_by_name(&tx, &self.user_name_old)?;
-        User::validate_password(&user_old, &self.raw_password_old)?;
+        let user_old = User::select_by_name(&conn, &self.old_user.name)?;
+        user_old.validate_password(&self.old_user.raw_password)?;
 
-        if self.user_name_old != self.user_name_new
-            && User::exists_by_name(&tx, &self.user_name_new)?
+        if self.old_user.name != self.new_user.name
+            && User::exists_by_name(&conn, &self.new_user.name)?
         {
-            return Err(Error::AlreadyExistsUser(self.user_name_new.clone()));
+            return Err(Error::AlreadyExistsUser(self.new_user.name));
         }
 
-        let user_new =
-            User::from_raw_password(self.user_name_new.clone(), self.raw_password_new.clone());
+        let user_new = User::from_raw_password(self.new_user.name, self.new_user.raw_password);
 
-        user_new.update(&tx, &self.user_name_old)?;
+        user_new.update(&conn, &self.old_user.name)?;
 
         Ok(())
     }
@@ -65,17 +52,14 @@ mod test {
 
     #[test]
     fn test_new() {
-        let update_user = UpdateUser::new(
-            String::from("old_name"),
-            String::from("new_name"),
-            String::from("old_pass"),
-            String::from("new_pass"),
-        );
+        let old_user = ArgUser::new(String::from("old_name"), String::from("old_pass"));
+        let new_user = ArgUser::new(String::from("new_name"), String::from("new_pass"));
+        let update_user = UpdateUser::new(old_user, new_user);
 
-        assert_eq!(update_user.user_name_old, String::from("old_name"));
-        assert_eq!(update_user.user_name_new, String::from("new_name"));
-        assert_eq!(update_user.raw_password_old, String::from("old_pass"));
-        assert_eq!(update_user.raw_password_new, String::from("new_pass"));
+        assert_eq!(update_user.old_user.name, String::from("old_name"));
+        assert_eq!(update_user.old_user.raw_password, String::from("old_pass"));
+        assert_eq!(update_user.new_user.name, String::from("new_name"));
+        assert_eq!(update_user.new_user.raw_password, String::from("new_pass"));
     }
 
     #[test]
@@ -84,17 +68,16 @@ mod test {
         let initializer = Initializer::new();
         initializer.run(&mut conn).unwrap();
 
-        let add_user = AddUser::new(String::from("name"), String::from("pass"));
+        let user = ArgUser::new(String::from("name"), String::from("pass"));
+        let add_user = AddUser::new(user);
         add_user.run(&mut conn).unwrap();
         let created = User::select_by_name(&conn, &String::from("name"));
 
-        let update_user = UpdateUser::new(
-            String::from("name"),
-            String::from("name"),
-            String::from("pass"),
-            String::from("new_pass"),
-        );
+        let old_user = ArgUser::new(String::from("name"), String::from("pass"));
+        let new_user = ArgUser::new(String::from("name"), String::from("new_pass"));
+        let update_user = UpdateUser::new(old_user, new_user);
         assert_eq!(update_user.run(&mut conn), Ok(()));
+
         let updated = User::select_by_name(&conn, &String::from("name"));
         assert_ne!(updated, created);
 
@@ -107,17 +90,16 @@ mod test {
         let initializer = Initializer::new();
         initializer.run(&mut conn).unwrap();
 
-        let add_user = AddUser::new(String::from("name"), String::from("pass"));
+        let user = ArgUser::new(String::from("name"), String::from("pass"));
+        let add_user = AddUser::new(user);
         add_user.run(&mut conn).unwrap();
         let created = User::select_by_name(&conn, &String::from("name"));
 
-        let update_user = UpdateUser::new(
-            String::from("name"),
-            String::from("new_name"),
-            String::from("pass"),
-            String::from("new_pass"),
-        );
+        let old_user = ArgUser::new(String::from("name"), String::from("pass"));
+        let new_user = ArgUser::new(String::from("new_name"), String::from("new_pass"));
+        let update_user = UpdateUser::new(old_user, new_user);
         assert_eq!(update_user.run(&mut conn), Ok(()));
+
         let updated = User::select_by_name(&conn, &String::from("new_name"));
         assert_ne!(updated, created);
 
@@ -130,18 +112,19 @@ mod test {
         let initializer = Initializer::new();
         initializer.run(&mut conn).unwrap();
 
-        let add_user = AddUser::new(String::from("name"), String::from("pass"));
+        let user = ArgUser::new(String::from("name"), String::from("pass"));
+        let add_user = AddUser::new(user);
         add_user.run(&mut conn).unwrap();
-        let add_user = AddUser::new(String::from("new_name"), String::from("pass"));
+
+        let user = ArgUser::new(String::from("new_name"), String::from("pass"));
+        let add_user = AddUser::new(user);
         add_user.run(&mut conn).unwrap();
+
         let created = User::select_by_name(&conn, &String::from("name"));
 
-        let update_user = UpdateUser::new(
-            String::from("_name"),
-            String::from("new_name"),
-            String::from("pass"),
-            String::from("new_pass"),
-        );
+        let old_user = ArgUser::new(String::from("_name"), String::from("pass"));
+        let new_user = ArgUser::new(String::from("new_name"), String::from("new_pass"));
+        let update_user = UpdateUser::new(old_user, new_user);
         assert_eq!(
             update_user.run(&mut conn),
             Err(Error::NotValidUser(
@@ -152,12 +135,9 @@ mod test {
         let rollbacked = User::select_by_name(&conn, &String::from("name"));
         assert_eq!(rollbacked, created);
 
-        let update_user = UpdateUser::new(
-            String::from("name"),
-            String::from("new_name"),
-            String::from("_pass"),
-            String::from("new_pass"),
-        );
+        let old_user = ArgUser::new(String::from("name"), String::from("_pass"));
+        let new_user = ArgUser::new(String::from("new_name"), String::from("new_pass"));
+        let update_user = UpdateUser::new(old_user, new_user);
         assert_eq!(
             update_user.run(&mut conn),
             Err(Error::NotValidUser(
@@ -168,12 +148,9 @@ mod test {
         let rollbacked = User::select_by_name(&conn, &String::from("name"));
         assert_eq!(rollbacked, created);
 
-        let update_user = UpdateUser::new(
-            String::from("name"),
-            String::from("new_name"),
-            String::from("pass"),
-            String::from("new_pass"),
-        );
+        let old_user = ArgUser::new(String::from("name"), String::from("pass"));
+        let new_user = ArgUser::new(String::from("new_name"), String::from("new_pass"));
+        let update_user = UpdateUser::new(old_user, new_user);
         assert_eq!(
             update_user.run(&mut conn),
             Err(Error::AlreadyExistsUser(String::from("new_name"),))

@@ -1,14 +1,14 @@
 use super::Ddl;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct Account {
     user_name: String,
     account_name: String,
-    account_id: String,
     password: String,
-    email: String,
-    url: String,
-    comment: String,
+    account_id: Option<String>,
+    email: Option<String>,
+    url: Option<String>,
+    comment: Option<String>,
 }
 
 impl Ddl for Account {
@@ -17,8 +17,8 @@ impl Ddl for Account {
         CREATE TABLE ACCOUNT(
         USER_NAME TEXT,
         ACCOUNT_NAME TEXT,
-        ACCOUNT_ID TEXT,
         ACCOUNT_PASSWORD TEXT NOT NULL,
+        ACCOUNT_ID TEXT,
         EMAIL TEXT,
         URL TEXT,
         COMMENT TEXT,

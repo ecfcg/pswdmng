@@ -1,37 +1,31 @@
-use rusqlite::{Connection, Transaction};
+use rusqlite::Connection;
 
 use super::SubCommand;
-use crate::pswdmng::error::Error;
-use crate::pswdmng::hashcode;
+use crate::pswdmng::Error;
 use crate::pswdmng::sql::table::User;
+use crate::pswdmng::ArgUser;
 
 pub(crate) struct AddUser {
-    user_name: String,
-    raw_user_password: String,
+    new_user: ArgUser,
 }
 
 impl AddUser {
-    pub(crate) fn new(user_name: String, raw_user_password: String) -> Self {
+    pub(crate) fn new(new_user: ArgUser) -> Self {
         AddUser {
-            user_name: user_name,
-            raw_user_password: raw_user_password,
+            new_user: new_user
         }
     }
 }
 
 impl SubCommand for AddUser {
-    fn run(self: Self, conn: &mut Connection) -> Result<(), Error> {
-        self.run_with_transaction(conn)
-    }
-
-    fn run_transaction_inner(self: &Self, tx: &Transaction) -> Result<(), Error> {
-        if User::exists_by_name(&tx, &self.user_name)? {
-            return Err(Error::AlreadyExistsUser(self.user_name.clone()));
+    fn run(self: Self, conn: &Connection) -> Result<(), Error> {
+        if User::exists_by_name(&conn, &self.new_user.name)? {
+            return Err(Error::AlreadyExistsUser(self.new_user.name));
         }
 
         let new_user =
-            User::from_raw_password(self.user_name.clone(), self.raw_user_password.clone());
-        new_user.insert(&tx)?;
+            User::from_raw_password(self.new_user.name, self.new_user.raw_password);
+        new_user.insert(&conn)?;
 
         Ok(())
     }
@@ -44,22 +38,25 @@ mod test {
 
     #[test]
     fn test_new() {
-        let result = AddUser::new(String::from("name"), String::from("password"));
-        assert_eq!(result.user_name, "name");
-        assert_eq!(result.raw_user_password, "password");
+        let user = ArgUser::new(String::from("name"), String::from("password"));
+        let result = AddUser::new(user);
+        assert_eq!(result.new_user.name, "name");
+        assert_eq!(result.new_user.raw_password, "password");
     }
 
     #[test]
-    fn test_run_transaction_inner() {
+    fn test_run() {
         let mut conn = Connection::open_in_memory().unwrap();
 
         let initializer = Initializer::new();
         initializer.run(&mut conn).unwrap();
 
-        let add_user = AddUser::new(String::from("name"), String::from("pass"));
+        let user = ArgUser::new(String::from("name"), String::from("pass"));
+        let add_user = AddUser::new(user);
         assert_eq!(add_user.run(&mut conn), Ok(()));
-        
-        let add_user = AddUser::new(String::from("name"), String::from("pass"));
+
+        let user = ArgUser::new(String::from("name"), String::from("pass"));
+        let add_user = AddUser::new(user);
         assert_eq!(
             add_user.run(&mut conn),
             Err(Error::AlreadyExistsUser(String::from("name")))

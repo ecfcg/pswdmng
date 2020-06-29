@@ -1,7 +1,7 @@
 use rusqlite::Connection;
 
 use super::Ddl;
-use crate::pswdmng::error::Error;
+use crate::pswdmng::Error;
 use crate::pswdmng::hashcode;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -85,11 +85,11 @@ impl User {
         }
     }
 
-    pub(crate) fn validate_password(user: &User, raw_password: &String) -> Result<(), Error> {
-        let hashed = hashcode::sha3_512_hashcode(&raw_password, &user.salt);
-        if user.user_password != hashed {
+    pub(crate) fn validate_password(self: &Self, raw_password: &String) -> Result<(), Error> {
+        let hashed = hashcode::sha3_512_hashcode(&raw_password, &self.salt);
+        if self.user_password != hashed {
             return Err(Error::NotValidUser(
-                user.user_name.clone(),
+                self.user_name.clone(),
                 raw_password.clone(),
             ));
         }
