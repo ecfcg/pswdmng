@@ -1,18 +1,17 @@
 use rusqlite::Connection;
 
 use super::Ddl;
-use crate::pswdmng::Error;
-use crate::pswdmng::hashcode;
+use crate::pswdmng::{create_ascii_str, hashcode,ArgUser, Error};
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct User {
-    user_name: String,
-    user_password: String,
+    pub(crate) user_name: String,
+    user_password: Vec<u8>,
     salt: String,
 }
 
 impl User {
-    pub(crate) fn new(user_name: String, user_password: String, salt: String) -> Self {
+    pub(crate) fn new(user_name: String, user_password: Vec<u8>, salt: String) -> Self {
         User {
             user_name: user_name,
             user_password: user_password,
@@ -20,13 +19,20 @@ impl User {
         }
     }
 
-    pub(crate) fn from_raw_password(
-        user_name: String,
-        raw_user_password: String,
-    ) -> Self {
-        let salt = hashcode::create_ascii_str(16);
+    pub(crate) fn from_raw_password(user_name: String, raw_user_password: String) -> Self {
+        let salt = create_ascii_str(16);
         let hashed = hashcode::sha3_512_hashcode(&raw_user_password, &salt);
         Self::new(user_name, hashed, salt)
+    }
+
+    pub(crate) fn from_arg_user(conn: &Connection, arg_user: ArgUser) -> Result<Self, Error> {
+        if !User::exists_by_name(&conn, &arg_user.name)? {
+            return Err(Error::NotValidUser(arg_user.name, arg_user.raw_password));
+        }
+
+        let user_old = User::select_by_name(&conn, &arg_user.name)?;
+        user_old.validate_password(arg_user.raw_password)?;
+        Ok(user_old)
     }
 
     pub(crate) fn select_by_name(conn: &Connection, user_name: &String) -> Result<Self, Error> {
@@ -85,13 +91,10 @@ impl User {
         }
     }
 
-    pub(crate) fn validate_password(self: &Self, raw_password: &String) -> Result<(), Error> {
+    pub(crate) fn validate_password(self: &Self, raw_password: String) -> Result<(), Error> {
         let hashed = hashcode::sha3_512_hashcode(&raw_password, &self.salt);
         if self.user_password != hashed {
-            return Err(Error::NotValidUser(
-                self.user_name.clone(),
-                raw_password.clone(),
-            ));
+            return Err(Error::NotValidUser(self.user_name.clone(), raw_password));
         }
         Ok(())
     }
@@ -102,7 +105,7 @@ impl Ddl for User {
         r###"
         CREATE TABLE USER(
             USER_NAME TEXT PRIMARY KEY,
-            USER_PASSWORD TEXT NOT NULL,
+            USER_PASSWORD BLOB NOT NULL,
             SALT TEXT NOT NULL
         )
         "###
@@ -116,14 +119,11 @@ impl Ddl for User {
 #[cfg(test)]
 mod test {
     use super::*;
-    use rusqlite::types::ToSql;
-
-    const EMPTY_PARAM: [&dyn ToSql; 0] = [];
 
     fn test_def_user() -> User {
         User::new(
             String::from("name"),
-            String::from("password"),
+            vec![0,1,2,3,4],
             String::from("salt"),
         )
     }
@@ -133,7 +133,7 @@ mod test {
         let user = test_def_user();
 
         assert_eq!(user.user_name, "name");
-        assert_eq!(user.user_password, "password");
+        assert_eq!(user.user_password, vec![0,1,2,3,4]);
         assert_eq!(user.salt, "salt");
     }
 
@@ -153,6 +153,41 @@ mod test {
         conn.close().unwrap();
     }
 
+    #[test]
+    fn test_from_arg_user() {
+        let user = User::from_raw_password(String::from("name"), String::from("pass"));
+
+        let conn = Connection::open_in_memory().unwrap();
+        User::create_table(&conn).unwrap();
+        user.clone().insert(&conn).unwrap();
+
+        // 正常系確認
+        let arg_user = ArgUser::new(String::from("name"), String::from("pass"));
+        assert_eq!(User::from_arg_user(&conn, arg_user), Ok(user));
+
+        // 異常系確認ユーザ名不一致
+        let arg_user = ArgUser::new(String::from("name_"), String::from("pass"));
+        assert_eq!(
+            User::from_arg_user(&conn, arg_user),
+            Err(Error::NotValidUser(
+                String::from("name_"),
+                String::from("pass")
+            ))
+        );
+
+        // 異常系確認パスワード不一致
+        let arg_user = ArgUser::new(String::from("name"), String::from("pass_"));
+        assert_eq!(
+            User::from_arg_user(&conn, arg_user),
+            Err(Error::NotValidUser(
+                String::from("name"),
+                String::from("pass_")
+            ))
+        );
+
+        User::drop_table(&conn).unwrap();
+        conn.close().unwrap();
+    }
     #[test]
     fn test_exists_by_name() {
         let user = test_def_user();
@@ -178,11 +213,6 @@ mod test {
         let conn = Connection::open_in_memory().unwrap();
         User::create_table(&conn).unwrap();
 
-        let count: isize = conn
-            .query_row("SELECT COUNT(*) FROM USER", &EMPTY_PARAM, |row| row.get(0))
-            .unwrap();
-        assert_eq!(count, 0);
-
         user.insert(&conn).unwrap();
 
         let user = test_def_user();
@@ -205,7 +235,7 @@ mod test {
 
         let user_updated = User::new(
             String::from("name_u"),
-            String::from("password_u"),
+            vec![0,1,2,3,4,5],
             String::from("salt_u"),
         );
 
@@ -215,7 +245,7 @@ mod test {
 
         let user_updated = User::new(
             String::from("name_u"),
-            String::from("password_u"),
+            vec![0,1,2,3,4,5],
             String::from("salt_u"),
         );
         assert_eq!(
@@ -229,17 +259,11 @@ mod test {
 
     #[test]
     fn test_validate_password() {
-        let user = User::from_raw_password(
-            String::from("name"),
-            String::from("pass"),
-        );
-        assert_eq!(
-            User::validate_password(&user, &String::from("pass")),
-            Ok(())
-        );
+        let user = User::from_raw_password(String::from("name"), String::from("pass"));
+        assert_eq!(User::validate_password(&user, String::from("pass")), Ok(()));
 
         assert_eq!(
-            User::validate_password(&user, &String::from("password")),
+            User::validate_password(&user, String::from("password")),
             Err(Error::NotValidUser(
                 user.user_name.clone(),
                 String::from("password")

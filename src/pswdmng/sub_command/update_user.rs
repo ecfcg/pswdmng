@@ -21,25 +21,16 @@ impl UpdateUser {
 
 impl SubCommand for UpdateUser {
     fn run(self: Self, conn: &Connection) -> Result<(), Error> {
-        if !User::exists_by_name(&conn, &self.old_user.name)? {
-            return Err(Error::NotValidUser(
-                self.old_user.name,
-                self.old_user.raw_password,
-            ));
-        }
+        let user_old = User::from_arg_user(&conn, self.old_user)?;
 
-        let user_old = User::select_by_name(&conn, &self.old_user.name)?;
-        user_old.validate_password(&self.old_user.raw_password)?;
-
-        if self.old_user.name != self.new_user.name
+        if user_old.user_name != self.new_user.name
             && User::exists_by_name(&conn, &self.new_user.name)?
         {
             return Err(Error::AlreadyExistsUser(self.new_user.name));
         }
 
         let user_new = User::from_raw_password(self.new_user.name, self.new_user.raw_password);
-
-        user_new.update(&conn, &self.old_user.name)?;
+        user_new.update(&conn, &user_old.user_name)?;
 
         Ok(())
     }

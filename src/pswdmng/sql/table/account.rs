@@ -4,11 +4,12 @@ use super::Ddl;
 pub(crate) struct Account {
     user_name: String,
     account_name: String,
-    password: String,
-    account_id: Option<String>,
-    email: Option<String>,
-    url: Option<String>,
-    comment: Option<String>,
+    password: Vec::<u8>,
+    nonce: Vec::<u8>,
+    account_id: String,
+    email: String,
+    url: String,
+    comment: String,
 }
 
 impl Ddl for Account {
@@ -17,11 +18,12 @@ impl Ddl for Account {
         CREATE TABLE ACCOUNT(
         USER_NAME TEXT,
         ACCOUNT_NAME TEXT,
-        ACCOUNT_PASSWORD TEXT NOT NULL,
-        ACCOUNT_ID TEXT,
-        EMAIL TEXT,
-        URL TEXT,
-        COMMENT TEXT,
+        ACCOUNT_PASSWORD BLOB NOT NULL,
+        NONCE BLOB NOT NULL,
+        ACCOUNT_ID TEXT NOT NULL,
+        EMAIL TEXT NOT NULL,
+        URL TEXT NOT NULL,
+        COMMENT TEXT NOT NULL,
         PRIMARY KEY(USER_NAME, ACCOUNT_NAME)
         )"###
     }
